@@ -25,7 +25,8 @@ class NormalizedOrderApiTest extends AbstractIntegrationTest {
         createOrder(customerName, "Second address", productId);
 
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM customers WHERE customer_full_name = ?", Long.class, customerName))
+                "SELECT COUNT(*) FROM customers WHERE first_name || COALESCE(' ' || last_name, '') = ?",
+                Long.class, customerName))
                 .isEqualTo(2L);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(DISTINCT customer_id) FROM orders", Long.class)).isEqualTo(2L);

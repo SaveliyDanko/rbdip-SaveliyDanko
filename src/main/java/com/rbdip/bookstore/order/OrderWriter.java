@@ -21,10 +21,12 @@ public class OrderWriter {
     }
 
     public Order save(CreateOrderRequest request, List<OrderItemsResolver.ResolvedItem> items) {
-        Customer customer = customerRepository.findByFullNameAndAddressAndPhone(
-                request.customerFullName(), request.customerAddress(), request.customerPhone())
-                .orElseGet(() -> customerRepository.save(new Customer(
-                        request.customerFullName(), request.customerAddress(), request.customerPhone())));
+        Customer requestedCustomer = new Customer(
+                request.customerFullName(), request.customerAddress(), request.customerPhone());
+        Customer customer = customerRepository.findByFirstNameAndLastNameAndAddressAndPhone(
+                requestedCustomer.getFirstName(), requestedCustomer.getLastName(),
+                requestedCustomer.getAddress(), requestedCustomer.getPhone())
+                .orElseGet(() -> customerRepository.save(requestedCustomer));
         Order order = new Order(customer, NEW_STATUS);
         order = orderRepository.save(order);
 

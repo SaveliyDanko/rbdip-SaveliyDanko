@@ -1,5 +1,5 @@
--- Keep existing orders and items while replacing copied contact/product data
--- with foreign keys. Flyway runs this migration in one PostgreSQL transaction.
+-- Expand the schema first. Old application instances still read and write the
+-- copied columns while new instances can use customer_id and product_id.
 
 CREATE TABLE customers (
     id BIGSERIAL PRIMARY KEY,
@@ -26,12 +26,30 @@ WHERE o.customer_full_name = c.customer_full_name
 
 ALTER TABLE orders
     ALTER COLUMN customer_id SET NOT NULL,
-    ADD CONSTRAINT orders_customer_fk FOREIGN KEY (customer_id) REFERENCES customers(id),
-    DROP COLUMN customer_full_name,
-    DROP COLUMN customer_address,
-    DROP COLUMN customer_phone;
+    ADD CONSTRAINT orders_customer_fk FOREIGN KEY (customer_id) REFERENCES customers(id);
 
 CREATE INDEX orders_customer_id_idx ON orders (customer_id);
+
+CREATE FUNCTION sync_order_customer() RETURNS trigger AS $$
+BEGIN
+    IF NEW.customer_id IS NULL THEN
+        INSERT INTO customers (customer_full_name, customer_address, customer_phone)
+        VALUES (NEW.customer_full_name, NEW.customer_address, NEW.customer_phone)
+        ON CONFLICT (customer_full_name, customer_address, customer_phone)
+        DO UPDATE SET customer_full_name = EXCLUDED.customer_full_name
+        RETURNING id INTO NEW.customer_id;
+    ELSE
+        SELECT customer_full_name, customer_address, customer_phone
+        INTO NEW.customer_full_name, NEW.customer_address, NEW.customer_phone
+        FROM customers WHERE id = NEW.customer_id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER orders_customer_compat
+    BEFORE INSERT ON orders
+    FOR EACH ROW EXECUTE FUNCTION sync_order_customer();
 
 ALTER TABLE order_items ADD COLUMN product_id BIGINT;
 
@@ -54,8 +72,28 @@ SET product_id = (
 
 ALTER TABLE order_items
     ALTER COLUMN product_id SET NOT NULL,
-    ADD CONSTRAINT order_items_product_fk FOREIGN KEY (product_id) REFERENCES products(id),
-    DROP COLUMN product_name,
-    DROP COLUMN product_price;
+    ADD CONSTRAINT order_items_product_fk FOREIGN KEY (product_id) REFERENCES products(id);
 
 CREATE INDEX order_items_product_id_idx ON order_items (product_id);
+
+CREATE FUNCTION sync_order_item_product() RETURNS trigger AS $$
+BEGIN
+    IF NEW.product_id IS NULL THEN
+        SELECT MIN(id) INTO NEW.product_id FROM products
+        WHERE name = NEW.product_name AND price = NEW.product_price;
+        IF NEW.product_id IS NULL THEN
+            INSERT INTO products (name, price)
+            VALUES (NEW.product_name, NEW.product_price)
+            RETURNING id INTO NEW.product_id;
+        END IF;
+    ELSE
+        SELECT name, price INTO NEW.product_name, NEW.product_price
+        FROM products WHERE id = NEW.product_id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER order_items_product_compat
+    BEFORE INSERT ON order_items
+    FOR EACH ROW EXECUTE FUNCTION sync_order_item_product();

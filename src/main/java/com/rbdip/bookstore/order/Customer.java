@@ -15,8 +15,11 @@ public class Customer {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "customer_full_name", nullable = false)
-    private String fullName;
+    @Column(name = "first_name", nullable = false)
+    private String firstName;
+
+    @Column(name = "last_name")
+    private String lastName;
 
     @Column(name = "customer_address")
     private String address;
@@ -29,7 +32,9 @@ public class Customer {
     }
 
     public Customer(String fullName, String address, String phone) {
-        this.fullName = fullName;
+        int separator = fullName.indexOf(' ');
+        this.firstName = separator < 0 ? fullName : fullName.substring(0, separator);
+        this.lastName = separator < 0 ? null : fullName.substring(separator + 1);
         this.address = address;
         this.phone = phone;
     }
@@ -39,7 +44,15 @@ public class Customer {
     }
 
     public String getFullName() {
-        return fullName;
+        return lastName == null ? firstName : firstName + " " + lastName;
+    }
+
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
     }
 
     public String getAddress() {
