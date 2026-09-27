@@ -36,9 +36,7 @@ def count_pmd_violations():
         return None
     try:
         root = ET.parse(path).getroot()
-        return sum(1 for _ in root.iter("{net.sourceforge.pmd}violation")) or sum(
-            1 for _ in root.iter("violation")
-        )
+        return sum(1 for element in root.iter() if element.tag.rsplit("}", 1)[-1] == "violation")
     except ET.ParseError:
         return None
 
@@ -92,9 +90,13 @@ def pit_mutation_score():
 
 
 def main():
-    checkstyle_violations = count_checkstyle_violations() or 0
-    pmd_violations = count_pmd_violations() or 0
-    style_ok = (checkstyle_violations + pmd_violations) <= STYLE_VIOLATIONS_THRESHOLD
+    checkstyle_violations = count_checkstyle_violations()
+    pmd_violations = count_pmd_violations()
+    style_ok = (
+        checkstyle_violations is not None
+        and pmd_violations is not None
+        and checkstyle_violations + pmd_violations <= STYLE_VIOLATIONS_THRESHOLD
+    )
 
     coverage = jacoco_line_coverage()
     coverage_ok = coverage is not None and coverage >= JACOCO_LINE_COVERAGE_MIN
