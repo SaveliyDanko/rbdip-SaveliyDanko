@@ -11,20 +11,25 @@ public class OrderWriter {
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final CustomerRepository customerRepository;
 
-    public OrderWriter(OrderRepository orderRepository, OrderItemRepository orderItemRepository) {
+    public OrderWriter(OrderRepository orderRepository, OrderItemRepository orderItemRepository,
+            CustomerRepository customerRepository) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
+        this.customerRepository = customerRepository;
     }
 
     public Order save(CreateOrderRequest request, List<OrderItemsResolver.ResolvedItem> items) {
-        Order order = new Order(
-                request.customerFullName(), request.customerAddress(), request.customerPhone(), NEW_STATUS);
+        Customer customer = customerRepository.findByFullNameAndAddressAndPhone(
+                request.customerFullName(), request.customerAddress(), request.customerPhone())
+                .orElseGet(() -> customerRepository.save(new Customer(
+                        request.customerFullName(), request.customerAddress(), request.customerPhone())));
+        Order order = new Order(customer, NEW_STATUS);
         order = orderRepository.save(order);
 
         for (OrderItemsResolver.ResolvedItem item : items) {
-            orderItemRepository.save(new OrderItem(
-                    order.getId(), item.product().getName(), item.product().getPrice(), item.quantity()));
+            orderItemRepository.save(new OrderItem(order.getId(), item.product(), item.quantity()));
         }
         return order;
     }
